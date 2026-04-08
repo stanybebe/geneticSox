@@ -349,6 +349,163 @@ class AudioGeneticAlgorithm:
                 return new_generation
         else:
             return new_generation
+        
+    def create_evolution_timeline(self):
+        """concatenate all generations into a single file showing evolution progression"""
+        print("\ncreating evolution timeline...")
+        
+        timeline_segments = []
+        silence_path = self.output_dir / "temp" / "silence.wav"
+        temp_dir = self.output_dir / "temp"
+        temp_dir.mkdir(exist_ok=True)
+        
+        try:
+            # create a 0.5 second silence separator
+            cmd = f"sox -n '{silence_path}' trim 0.0 0.5"
+            subprocess.run(cmd, shell=True, capture_output=True)
+            
+            # collect files from each generation
+            for gen in range(1, self.max_generations + 1):
+                gen_dir = self.output_dir / f"gen_{gen}"
+                
+                if gen_dir.exists():
+                    gen_files = list(gen_dir.glob("*.wav"))
+                    if gen_files:
+                        print(f"  adding generation {gen}: {len(gen_files)} files")
+                        
+                        # add generation label (optional - creates a tiny blip)
+                        if timeline_segments:  # not for first generation
+                            timeline_segments.append(str(silence_path))
+                        
+                        # add all files from this generation
+                        for file in sorted(gen_files):
+                            timeline_segments.append(str(file))
+                            
+                            # short pause between offspring in same generation
+                            silence_short = temp_dir / "silence_short.wav"
+                            cmd = f"sox -n '{silence_short}' trim 0.0 0.1"
+                            subprocess.run(cmd, shell=True, capture_output=True)
+                            timeline_segments.append(str(silence_short))
+            
+            if len(timeline_segments) > 0:
+                timeline_output = self.output_dir / "evolution_timeline.wav"
+                
+                # normalize all segments to same sample rate and channels
+                normalized_segments = []
+                target_rate = 44100  # standard sample rate
+                
+                for i, segment in enumerate(timeline_segments):
+                    if Path(segment).exists():
+                        normalized_path = temp_dir / f"norm_{i}.wav"
+                        cmd = f"sox '{segment}' '{normalized_path}' channels 2 rate {target_rate}"
+                        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                        
+                        if result.returncode == 0:
+                            normalized_segments.append(str(normalized_path))
+                
+                # concatenate everything
+                if len(normalized_segments) > 0:
+                    input_files = " ".join(f"'{f}'" for f in normalized_segments)
+                    cmd = f"sox {input_files} '{timeline_output}'"
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        file_size = timeline_output.stat().st_size
+                        try:
+                            info = sox.file_info.info(str(timeline_output))
+                            duration = info['duration']
+                            print(f"  evolution timeline created: {timeline_output.name}")
+                            print(f"  duration: {duration:.2f}s, size: {file_size} bytes")
+                            return str(timeline_output)
+                        except:
+                            print(f"  evolution timeline created: {timeline_output.name}")
+                            return str(timeline_output)
+                    else:
+                        print(f"  failed to create timeline: {result.stderr}")
+                else:
+                    print("  no valid segments found for timeline")
+            else:
+                print("  no generation files found")
+                
+        except Exception as e:
+            print(f"  error creating timeline: {e}")
+            
+        finally:
+            # cleanup temp normalization files
+            try:
+                for temp_file in temp_dir.glob("norm_*.wav"):
+                    temp_file.unlink()
+                for temp_file in temp_dir.glob("silence*.wav"):
+                    temp_file.unlink()
+            except:
+                pass
+        
+        return None
+
+    def create_best_of_timeline(self):
+        """create a timeline with just the survivors from each generation"""
+        print("\ncreating 'best of evolution' timeline...")
+        
+        timeline_segments = []
+        temp_dir = self.output_dir / "temp"
+        temp_dir.mkdir(exist_ok=True)
+        
+        # create silence separator
+        silence_path = temp_dir / "silence.wav" 
+        cmd = f"sox -n '{silence_path}' trim 0.0 1.0"  # 1 second silence
+        subprocess.run(cmd, shell=True, capture_output=True)
+        
+        try:
+            # collect survivor files (we'd need to track these during evolution)
+            # for now, just take first 2 files from each generation as "survivors"
+            for gen in range(1, self.max_generations + 1):
+                gen_dir = self.output_dir / f"gen_{gen}"
+                
+                if gen_dir.exists():
+                    gen_files = sorted(list(gen_dir.glob("*.wav")))[:self.survivors_per_gen]
+                    if gen_files:
+                        print(f"  adding gen {gen} survivors: {len(gen_files)} files")
+                        
+                        if timeline_segments:  # add silence between generations
+                            timeline_segments.append(str(silence_path))
+                        
+                        timeline_segments.extend([str(f) for f in gen_files])
+            
+            if len(timeline_segments) > 0:
+                best_output = self.output_dir / "best_of_evolution.wav"
+                
+                # normalize and concatenate
+                normalized_segments = []
+                for i, segment in enumerate(timeline_segments):
+                    if Path(segment).exists():
+                        normalized_path = temp_dir / f"best_norm_{i}.wav"
+                        cmd = f"sox '{segment}' '{normalized_path}' channels 2 rate 44100"
+                        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                        
+                        if result.returncode == 0:
+                            normalized_segments.append(str(normalized_path))
+                
+                if len(normalized_segments) > 0:
+                    input_files = " ".join(f"'{f}'" for f in normalized_segments)
+                    cmd = f"sox {input_files} '{best_output}'"
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        print(f"  best of evolution created: {best_output.name}")
+                        return str(best_output)
+                        
+        except Exception as e:
+            print(f"  error creating best of timeline: {e}")
+        
+        finally:
+            # cleanup
+            try:
+                for temp_file in temp_dir.glob("best_norm_*.wav"):
+                    temp_file.unlink()
+            except:
+                pass
+        
+        return None
 
     def run_evolution(self):
         """run the complete evolutionary process"""
@@ -363,7 +520,12 @@ class AudioGeneticAlgorithm:
         final_generation = self.create_generation(parents, 1)
         
         print(f"\nevolution complete! final generation has {len(final_generation)} offspring")
-        return final_generation
+        
+        # create evolution timelines
+        full_timeline = self.create_evolution_timeline()
+        best_timeline = self.create_best_of_timeline()
+        
+        return final_generation, full_timeline, best_timeline
 
 def main():
     inputs_folder = "./inputs"
@@ -377,7 +539,6 @@ def main():
     
     ga = AudioGeneticAlgorithm([])
     
-    # get 4 samples for 2 pairs
     selected_samples = ga.get_random_samples(inputs_folder, 4)
     
     if len(selected_samples) < 4:
@@ -394,14 +555,19 @@ def main():
     print(f"   parent 3: {ga.parents[2].name}")
     print(f"   parent 4: {ga.parents[3].name}")
     
-    # maybe add wild card
     ga.maybe_add_wild_card(inputs_folder)
     
-    offspring = ga.run_evolution()
+    offspring, full_timeline, best_timeline = ga.run_evolution()
     
     print(f"\nfinal generation {ga.max_generations}:")
     for i, child in enumerate(offspring):
         print(f"  {i+1}. {child}")
+    
+    if full_timeline:
+        print(f"\nevolution timeline: {full_timeline}")
+    if best_timeline:
+        print(f"best of evolution: {best_timeline}")
+        
     print(f"\nplay them to hear {ga.max_generations} generations of genetic audio evolution!")
     print("run again for different random selections!")
 
