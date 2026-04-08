@@ -15,13 +15,13 @@ class AudioGeneticAlgorithm:
         self.output_dir.mkdir(exist_ok=True)
         self.generation = 0
         self.population_size = 12  # more offspring with 4 parents
-        self.max_generations = 4
-        self.survivors_per_gen = 5  # keep 3 survivors for more diversity
+        self.max_generations = 2
+        self.survivors_per_gen = 3  # keep 3 survivors for more diversity
         
     def get_random_samples(self, folder_path, count=4):  # now gets 4 samples
         """pick random audio samples from a folder"""
         folder = Path(folder_path)
-        audio_extensions = ['*.wav', '*.aif', '*.aiff', '*.mp3', '*.flac', '*.m4a']
+        audio_extensions = ['*.wav', '*.aif', '*.aiff', '*.flac']
         
         all_files = []
         for ext in audio_extensions:
@@ -39,7 +39,7 @@ class AudioGeneticAlgorithm:
         """random chance to add a 5th sample to spice things up"""
         if random.random() < 0.2:  # 20% chance
             folder = Path(inputs_folder)
-            audio_extensions = ['*.wav', '*.aif', '*.aiff', '*.mp3', '*.flac', '*.m4a']
+            audio_extensions = ['*.wav', '*.aif', '*.aiff', '*.flac']
             
             all_files = []
             for ext in audio_extensions:
