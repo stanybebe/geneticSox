@@ -14,8 +14,8 @@ class AudioGeneticAlgorithm:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         self.generation = 0
-        self.population_size = 12  # more offspring with 4 parents
-        self.max_generations = 2
+        self.population_size = 8  # more offspring with 4 parents
+        self.max_generations = 5
         self.survivors_per_gen = 3  # keep 3 survivors for more diversity
         
     def get_random_samples(self, folder_path, count=4):  # now gets 4 samples
@@ -141,8 +141,39 @@ class AudioGeneticAlgorithm:
                             effects.append(f"pitch {wobble_depth}")
                             effects.append(f"tremolo {wobble_rate}")
                             print(f"      pitch wobble: {wobble_depth:+.0f} cents at {wobble_rate:.1f}hz")
-                    
-                    # fades (60% chance)
+                                    # TIME STRETCHING - ENHANCED! (50% chance)
+                    if random.random() < 0.5:
+                        stretch_type = random.choice(['tempo_smooth', 'tempo_extreme', 'stretch', 'tempo_random'])
+                        
+                        if stretch_type == 'tempo_smooth':
+                            # smooth tempo changes
+                            tempo_factor = random.uniform(0.8, 1.25)
+                            effects.append(f"tempo {tempo_factor}")
+                            print(f"      smooth tempo: {tempo_factor:.2f}x")
+                            
+                        elif stretch_type == 'tempo_extreme':
+                            # extreme tempo changes
+                            tempo_factor = random.choice([
+                                random.uniform(0.25, 0.5),   # very slow
+                                random.uniform(0.5, 0.75),   # slow
+                                random.uniform(1.5, 2.5),    # fast
+                                random.uniform(2.5, 4.0)     # very fast
+                            ])
+                            effects.append(f"tempo {tempo_factor}")
+                            print(f"      extreme tempo: {tempo_factor:.2f}x")
+                            
+                        elif stretch_type == 'stretch':
+                            # time stretch without pitch change
+                            stretch_factor = random.uniform(0.5, 2.0)
+                            effects.append(f"stretch {stretch_factor}")
+                            print(f"      time stretch: {stretch_factor:.2f}x (no pitch change)")
+                            
+                        elif stretch_type == 'tempo_random':
+                            # completely random tempo
+                            tempo_factor = random.uniform(0.1, 5.0)
+                            effects.append(f"tempo {tempo_factor}")
+                            print(f"      random tempo: {tempo_factor:.2f}x")
+                        # fades (60% chance)
                     if random.random() < 0.6:
                         fade_type = random.choice(['in', 'out', 'both'])
                         fade_duration = min(actual_duration * 0.3, 0.1)
